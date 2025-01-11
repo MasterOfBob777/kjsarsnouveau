@@ -1,9 +1,12 @@
 plugins {
-    id 'eclipse'
     id 'idea'
+    id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.gradle' version '[6.0.18,6.2)'
-    id 'org.spongepowered.mixin' version '0.7.+'
+    id 'net.neoforged.moddev' version '1.0.23'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
 }
 
 version = mod_version
@@ -16,6 +19,16 @@ repositories {
         url 'https://maven.blamejared.com'
         content {
             includeGroup "com.hollingsworth.ars_nouveau"
+            includeGroup "mezz.jei"
+            includeGroup "vazkii.patchouli"
+        }
+    }
+
+    maven {
+        name = 'GeckoLib'
+        url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content {
+            includeGroup("software.bernie.geckolib")
         }
     }
 
@@ -31,6 +44,7 @@ repositories {
         url = "https://maven.saps.dev/minecraft"
         content {
             includeGroup "dev.latvian.mods"
+            includeGroup "dev.latvian.apps"
         }
     }
 
@@ -45,74 +59,97 @@ repositories {
     maven {
         url = "https://maven.fabricmc.net/"
     }
+
+    maven {
+        url 'https://jitpack.io'
+        content {
+            includeGroup "com.github.rtyley"
+            includeGroup "com.github.glitchfiend"
+        }
+    }
+
+    maven { url "https://maven.octo-studios.com/releases" }
+}
+
+dependencies {
+    implementation "dev.architectury:architectury-neoforge:$architectury_version"
+
+    // KubeJS
+    implementation "dev.latvian.mods:kubejs-neoforge:$kubejs_version"
+    implementation "dev.latvian.mods:rhino:$rhino_version"
+
+    // Ars Nouveau
+    compileOnly "com.hollingsworth.ars_nouveau:ars_nouveau-1.21.1:$arsnouveau_version"
+    //implementation "vazkii.patchouli:Patchouli:$patchouli_version"
+    //implementation "top.theillusivec4.curios:curios-neoforge:$curios_version"
+    //implementation "software.bernie.geckolib:geckolib-neoforge-1.21.1:$geckolib_version"
+    //implementation "curse.maven:terrablender-940057:$terrablender_version"
+
+    compileOnly "mezz.jei:jei-$minecraft_version-common-api:$jei_version"
+    compileOnly "mezz.jei:jei-$minecraft_version-neoforge-api:$jei_version"
+
+    runtimeOnly "mezz.jei:jei-$minecraft_version-neoforge:$jei_version"
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
 }
 
 base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
-println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
-minecraft {
-    mappings channel: mapping_channel, version: mapping_version
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-    copyIdeResources = true
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
     runs {
-        configureEach {
-            workingDirectory project.file("run/${it.name}")
-
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-
         client {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            client()
+
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            type = "gameTestServer"
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         data {
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+            data()
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
         }
     }
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
-dependencies {
-    minecraft "net.neoforged:forge:${minecraft_version}-${neo_version}"
-
-    implementation fg.deobf("dev.architectury:architectury-forge:$architectury_version")
-
-    // KubeJS
-    implementation fg.deobf("dev.latvian.mods:kubejs-forge:$kubejs_version")
-    implementation fg.deobf("dev.latvian.mods:rhino-forge:$rhino_version")
-
-    // Ars Nouveau
-    implementation fg.deobf("com.hollingsworth.ars_nouveau:ars_nouveau-1.20.1:$arsnouveau_version")
-    implementation fg.deobf("curse.maven:patchouli-306770:$patchouli_version")
-    implementation fg.deobf("curse.maven:curios-309927:$curios_version")
-    implementation fg.deobf("curse.maven:geckolib-388172:$geckolib_version")
-
-    runtimeOnly fg.deobf("curse.maven:jei-238222:4712868")
-
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
 }
 
-tasks.withType(ProcessResources).configureEach {
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
@@ -124,37 +161,37 @@ tasks.withType(ProcessResources).configureEach {
             mod_license            : mod_license,
             mod_version            : mod_version,
             mod_authors            : mod_authors,
-            mod_description        : mod_description,
-            pack_format_number     : pack_format_number,
-            kubejs_version         : kubejs_version,
-            arsnouveau_version    : arsnouveau_version,
+            mod_description        : mod_description
     ]
     inputs.properties replaceProperties
-
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
-    }
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
 }
 
-// Example for how to get properties into the manifest for reading at runtime.
-tasks.named('jar', Jar).configure {
-    manifest {
-        attributes([
-                'Specification-Title'     : mod_id,
-                'Specification-Vendor'    : mod_authors,
-                'Specification-Version'   : '1', // We are version 1 of ourselves
-                'Implementation-Title'    : project.name,
-                'Implementation-Version'  : project.jar.archiveVersion,
-                'Implementation-Vendor'   : mod_authors,
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
-        ])
-    }
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
 
-    // This is the preferred method to reobfuscate your jar file
-    finalizedBy 'reobfJar'
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/repo"
+        }
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+    options.encoding = 'UTF-8'
 }
 
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

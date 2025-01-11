@@ -1,58 +1,22 @@
 package com.bobvarioa.kubejsarsnouveau.components;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.latvian.mods.kubejs.item.InputItem;
-import dev.latvian.mods.kubejs.item.OutputItem;
-import dev.latvian.mods.kubejs.recipe.*;
+import dev.latvian.mods.kubejs.recipe.KubeRecipe;
 import dev.latvian.mods.kubejs.recipe.component.*;
-import dev.latvian.mods.kubejs.util.MapJS;
+import net.minecraft.world.item.ItemStack;
 
 public class ArsComponents {
 
-    public static RecipeComponent<InputItem> INPUT_ITEM = new RecipeComponentWithParent<InputItem>() {
+    public static RecipeComponent<ItemStack> CRUSH_OUTPUT = new RecipeComponentWithParent<ItemStack>() {
+
         @Override
-        public RecipeComponent<InputItem> parentComponent() {
-            return ItemComponents.INPUT;
+        public RecipeComponent<ItemStack> parentComponent() {
+            return ItemStackComponent.ITEM_STACK;
         }
 
         @Override
-        public JsonElement write(RecipeJS recipe, InputItem value) {
-            var json = new JsonObject();
-            json.add("item", recipe.writeInputItem(value));
-            return json;
-        }
-
-        @Override
-        public InputItem read(RecipeJS recipe, Object from) {
-            var json = MapJS.json(from);
-            if (json == null) {
-                return recipe.readInputItem(from);
-            }
-            JsonElement item = json.get("item");
-            return recipe.readInputItem(item == null ? from : item);
-        }
-    };
-
-
-    public static RecipeComponent<OutputItem> CRUSH_OUTPUT = new RecipeComponentWithParent<OutputItem>() {
-
-        @Override
-        public RecipeComponent<OutputItem> parentComponent() {
-            return ItemComponents.OUTPUT;
-        }
-
-        @Override
-        public String componentType() {
-            return "ars_output_item_range";
-        }
-
-
-        @Override
-        public JsonElement write(RecipeJS recipe, OutputItem value) {
-            var json = RecipeComponentWithParent.super.write(recipe, value).getAsJsonObject();
-            if (value.rolls != null) json.addProperty("maxRange", value.rolls.getMaxValue());
-            return json;
+        public void writeToJson(KubeRecipe recipe, RecipeComponentValue<ItemStack> cv, JsonObject json) {
+            if (cv.value != null) json.addProperty("maxRange", String.valueOf(cv.getValue()));
         }
     };
 }
